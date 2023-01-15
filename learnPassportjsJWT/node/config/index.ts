@@ -3,14 +3,14 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 const config = {
-    port: process.env.PORT,
-    sessionSecret: process.env.SESSION_SECRET,
+    port: 4000,
+    sessionSecret: 'somerandomsecret123',
     database: {
-        host: process.env.DATABASE_HOST,
-        user: process.env.DATABASE_USER,
-        password: process.env.DATABASE_PASSWORD,
-        name: process.env.DATABASE_NAME,
-        port: process.env.DATABASE_PORT,
+        host: 'node_mongo_1',
+        user: 'root',
+        password: 'example',
+        name: 'learnPassportjs',
+        port: '27017',
     },
 }
 

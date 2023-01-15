@@ -19,6 +19,7 @@ const app = express();
  * --------------SETUP DB--------------
  */
 const url = `mongodb://${config.database.user}:${config.database.password}@${config.database.host}:${config.database.port}`
+console.log({ url })
 const client = new MongoClient(url)
 
 client.connect()
@@ -31,6 +32,10 @@ client.connect()
  * For standard db crud 
 */
 const db = client.db(config.database.name)
+
+
+
+const authMiddleware = passport.authenticate(`jwt`, { session: false })
 
 /**
  * daniel.kwok 12/5/2022
@@ -85,17 +90,7 @@ app.use(bodyParser.urlencoded({ extended: false }))
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(sessions({
-    secret: config.sessionSecret,
-    saveUninitialized: true,
-    cookie: {
-        maxAge: 1000 * 60 * 60 * 24 // one day in ms
-    },
-    resave: false,
-    store: sessionStore
-}));
 app.use(passport.initialize())
-app.use(passport.session())
 
 
 
@@ -107,13 +102,141 @@ type User = {
     username: string,
     salt: string,
     hash: string,
-    isAdmin?: boolean,
 }
 
 /**
  * --------------API ROUTES--------------
  */
 app.post('/login', async (req, res) => {
+
+    const {
+        uname, pw
+    } = req.body
+
+    try {
+        if (!uname) throw new Error('Missing uname')
+        if (!pw) throw new Error('Missing pw')
+
+        const user = await db.collection("User").findOne({
+            username: uname,
+        }) as User
+
+        if (!user) throw new Error(`No user found`)
+        const hashedPassword = crypto.pbkdf2Sync(pw, user.salt, 10000, 64, 'sha512').toString('hex')
+        const isValidPassword = hashedPassword === user.hash
+
+        if (!isValidPassword) throw new Error(`Wrong username or password provided`)
+
+        /**
+         * Remove sensitive data
+         */
+        delete user.salt
+        delete user.hash
+
+        const {
+            token, expires
+        } = issueJWT(user)
+
+        res.json({
+            success: true,
+            user: user,
+            token: token,
+            expiresIn: expires,
+        })
+
+    } catch (err) {
+        res.status(401).json({
+            success: false,
+            message: err.message
+        })
+    }
+})
+
+app.post('/signup', async (req, res) => {
+
+    try {
+        const body: {
+            uname: string,
+            pw: string,
+        } = req.body
+
+        if (!body.uname) throw new Error('Missing uname')
+        if (!body.pw) throw new Error('Missing pw')
+
+        const {
+            salt, hash
+        } = generatePassword(body.pw)
+
+        const user: User = {
+            username: body.uname,
+            salt: salt,
+            hash: hash,
+        }
+
+        const tx = await db.collection('User').insertOne(user)
+
+        user._id = tx.insertedId
+
+        const {
+            token, expires
+        } = issueJWT(user)
+
+
+        res.json({
+            success: true,
+            user: user,
+            token: token,
+            expiresIn: expires,
+        })
+
+        function generatePassword(passwordPlain: string): { salt: string, hash: string } {
+            const salt = crypto.randomBytes(32).toString('hex')
+            const hash = crypto.pbkdf2Sync(passwordPlain, salt, 10000, 64, 'sha512').toString('hex')
+
+            return {
+                salt,
+                hash
+            }
+        }
+
+    } catch (err) {
+        res.status(400).send(err.toString())
+    }
+})
+
+app.post('/verify-session', authMiddleware, async (req, res) => {
+    res.json({
+        success: true,
+    })
+})
+
+app.post('/logout', async (req, res) => {
+    req.logout()
+    res.json({
+        success: true
+    })
+})
+
+app.get('/getAllUsers', authMiddleware, async (req, res) => {
+
+    let users = await db.collection("User").find().toArray() as User[]
+    users = users.map(user => {
+        /**
+         * Delete sensitive info
+         */
+        delete user.hash
+        delete user.salt
+
+        return user
+    })
+
+    res.json({
+        users
+    })
+
+})
+
+app.get('/login', async (req, res) => {
 
     const {
         uname, pw
@@ -149,68 +272,11 @@ app.post('/login', async (req, res) => {
     }
 })
 
-app.post('/signup', async (req, res) => {
-    const body: {
-        uname: string,
-        pw: string,
-        isAdmin: boolean
-    } = req.body
-
-    const {
-        salt, hash
-    } = generatePassword(body.pw)
-
-    const user: User = {
-        username: body.uname,
-        salt: salt,
-        hash: hash,
-        isAdmin: body.isAdmin,
-    }
-
-    const tx = await db.collection('User').insertOne(user)
-
-    user._id = tx.insertedId
-
-    const {
-        token, expires
-    } = issueJWT(user)
-
-
-    res.json({
-        success: true,
-        user: user,
-        token: token,
-        expiresIn: expires,
-    })
-
-    function generatePassword(passwordPlain: string): { salt: string, hash: string } {
-        const salt = crypto.randomBytes(32).toString('hex')
-        const hash = crypto.pbkdf2Sync(passwordPlain, salt, 10000, 64, 'sha512').toString('hex')
-
-        return {
-            salt,
-            hash
-        }
-    }
-})
-
-app.post('/verify-session', passport.authenticate(`jwt`, { session: false }), async (req, res) => {
-    res.json({
-        success: true,
-    })
-})
-
-app.post('/logout', async (req, res) => {
-    req.logout()
-    res.json({
-        success: true
-    })
-})
-
 /**
  * --------------COMMON UTILS--------------
  */
- function issueJWT(user: User): { token: string, expires: string } {
+
+function issueJWT(user: User): { token: string, expires: string } {
     const payload: {
         sub?: ObjectId,
         iat: number,
@@ -219,7 +285,7 @@ app.post('/logout', async (req, res) => {
         iat: Date.now()
     }
 
-    const expiresIn = '1d'
+    const expiresIn = '1s'
 
     const privateKey = fs.readFileSync(path.join(__dirname, './dummy_private_key.pem'))
 

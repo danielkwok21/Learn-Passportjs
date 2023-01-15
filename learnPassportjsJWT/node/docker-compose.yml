@@ -1,0 +1,19 @@
+services:
+  mongo:
+    image: mongo:5.0.8
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+
+  api:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    depends_on:
+      - mongo
+    volumes: 
+      - ./:/app
+      - /app/node_modules
