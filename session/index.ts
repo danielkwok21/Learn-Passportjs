@@ -191,8 +191,13 @@ app.post('/signup', async (req, res) => {
 })
 
 app.post('/logout', async (req, res) => {
-    req.logout()
-    res.redirect('/')
+    req.logout(err => {
+        if(err){
+            res.send('Unable to logout')
+        }else{
+            res.redirect('/')
+        }
+    })
 })
 
 /**
