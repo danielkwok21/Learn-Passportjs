@@ -1,0 +1,31 @@
+services:
+  mongo:
+    container_name: session_mongo
+    image: mongo:5.0.8
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+
+  api:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: session_api
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    depends_on:
+      - mongo
+    volumes: 
+      - ./:/app
+      - /app/node_modules
+    environment:
+      DB_USERNAME: root
+      DB_PASSWORD: example
+      DB_HOST: session_mongo
+      DB_NAME: learnPassportjs
+      DB_PORT: 27017
+      PORT: 4000
+      SESSION_SECRET: some secret
+
+
