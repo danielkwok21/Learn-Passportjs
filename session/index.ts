@@ -8,6 +8,7 @@ import { MongoClient, ObjectId } from 'mongodb';
 import passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
 import dotenv from 'dotenv'
+import cors from 'cors'
 
 dotenv.config()
 
@@ -116,6 +117,7 @@ passport.deserializeUser((userId: string, onDone: Function) => {
 /**
  * --------------INJECTING MIDDLEWARE--------------
  */
+app.use(cors())
 app.use(bodyParser.urlencoded({ extended: false }))
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
