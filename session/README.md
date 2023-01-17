@@ -25,7 +25,7 @@ Guide: https://youtu.be/F-sFp_AvHc8?t=3904
 
 ### 3. Login
 1. Login with created account at http://localhost:4000/
-2. Observe created session at http://localhost:8081/db/learnPassportjs/Session
+2. Observe updated session with `user` property at http://localhost:8081/db/learnPassportjs/Session
 ```json
 {
     _id: 'Xoh7sA1l8hI1ASpAqWZSnZENlKOCnidc',
