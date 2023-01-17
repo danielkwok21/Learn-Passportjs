@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  BrowserRouter, Link, Navigate, Route, Routes
+  BrowserRouter, Link, Route, Routes
 } from "react-router-dom";
 import './App.css';
 
@@ -9,53 +9,10 @@ const BASE_URL = `http://localhost:4000`
 
 function App() {
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-
-  useEffect(() => {
-    verifySession()
-  }, [])
-
-  function verifySession() {
-    setIsLoading(true)
-
-    fetch(`${BASE_URL}/verify-session`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': localStorage.getItem('jwt')
-      }
-    })
-      .then(res => res.json())
-      .then(res => {
-        if (res) {
-          setIsLoggedIn(true)
-        }
-      })
-      .catch(err => {
-        setIsLoggedIn(false)
-
-      })
-      .finally(() => setIsLoading(false))
-  }
-
-
-  if (isLoading) {
-    return <div></div>
-  }
-
   return (
     <div className="App">
-      <p>isLoggedIn: {isLoggedIn ? "true" : "false"}</p>
-
-      {
-        isLoggedIn ? (
-          <ProtectedRoutes />
-        ) : (
-          <PublicRoutes />
-        )
-      }
+      <ProtectedRoutes />
+      <PublicRoutes />
     </div>
   );
 }
@@ -183,12 +140,6 @@ function PublicRoutes() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
-        {/* 
-        24/5/2022 daniel.kwok
-        If anything else, simply redirect to login.
-        Used e.g. user tries to access a protected route, e.g. / or /profile
-        */}
-        <Route path="*" element={<Navigate to='/login' />} />
       </Routes>
     </BrowserRouter>
   )
@@ -231,15 +182,27 @@ function ProtectedRoutes() {
         'Authorization': localStorage.getItem('jwt')
       }
     })
-      .then(res => res.json())
+      .then(res => {
+        console.log(res.ok)
+        console.log(res.status)
+        if(res.ok){
+          return res.json()
+        }else{
+          return res.text()
+        }
+      })
       .then(res => {
         setProfile(res.user)
+      })
+      .catch(err => {
+        const error = new Error(err)
+        console.log(error)
       })
   }
 
   useEffect(() => {
     getProfile()
-  },[])
+  }, [])
 
   return (
     <BrowserRouter>
