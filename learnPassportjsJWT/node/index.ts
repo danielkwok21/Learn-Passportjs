@@ -217,21 +217,19 @@ app.post('/logout', async (req, res) => {
     })
 })
 
-app.get('/getAllUsers', authMiddleware, async (req, res) => {
+/**
+ * Protected route
+ */
+app.get('/profile', authMiddleware, async (req, res) => {
 
-    let users = await db.collection("User").find().toArray() as User[]
-    users = users.map(user => {
-        /**
-         * Delete sensitive info
-         */
-        delete user.hash
-        delete user.salt
+    let user = req.user as User
 
-        return user
-    })
+    /**delete sensitive fields */
+    delete user.hash
+    delete user.salt
 
     res.json({
-        users
+        user
     })
 
 })

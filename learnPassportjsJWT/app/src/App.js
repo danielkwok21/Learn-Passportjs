@@ -197,6 +197,8 @@ function PublicRoutes() {
 /**STEP 3 */
 function ProtectedRoutes() {
 
+  const [profile, setProfile] = useState()
+
   function signOut() {
 
     fetch(`${BASE_URL}/logout`, {
@@ -220,8 +222,28 @@ function ProtectedRoutes() {
       })
   }
 
+  function getProfile() {
+
+    fetch(`${BASE_URL}/profile`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': localStorage.getItem('jwt')
+      }
+    })
+      .then(res => res.json())
+      .then(res => {
+        setProfile(res.user)
+      })
+  }
+
+  useEffect(() => {
+    getProfile()
+  },[])
+
   return (
     <BrowserRouter>
+      <h1>Hi, {profile?.username}</h1>
       <div>
         <Link to="/">Home</Link>
         <Link to="/profile">Profile</Link>
