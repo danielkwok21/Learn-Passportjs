@@ -183,20 +183,24 @@ function ProtectedRoutes() {
       }
     })
       .then(res => {
-        console.log(res.ok)
-        console.log(res.status)
         if(res.ok){
           return res.json()
         }else{
-          return res.text()
+          throw res
         }
       })
       .then(res => {
         setProfile(res.user)
       })
       .catch(err => {
-        const error = new Error(err)
-        console.log(error)
+        switch(err.status){
+          case 401:
+            console.log(401)
+            // Proceed to call another api with refresh token
+            break
+          default:
+            console.log(err.status)
+        }
       })
   }
 
