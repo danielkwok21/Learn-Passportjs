@@ -71,8 +71,11 @@ const CUSTOM_FIELDS = {
  * 18/5/2022 daniel.kwok
  * passportjs magic, A callback function to validate password etc
  * Function name can be custom, but function interface must be constant as shown here
+ * 
+ * This function will be called on login()
  */
 const verifyCallback = async (username: string, password: string, onDone: Function) => {
+    console.log(`verifyCallback`, { username, password })
     try {
         const user = await db.collection("User").findOne({
             username: username,
