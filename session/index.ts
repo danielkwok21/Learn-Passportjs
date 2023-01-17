@@ -194,9 +194,9 @@ app.post('/signup', async (req, res) => {
 
 app.post('/logout', async (req, res) => {
     req.logout(err => {
-        if(err){
+        if (err) {
             res.send('Unable to logout')
-        }else{
+        } else {
             res.redirect('/')
         }
     })
@@ -206,29 +206,28 @@ app.post('/logout', async (req, res) => {
  * --------------View routes--------------
  */
 
-app.get('/', async (req, res) => {
+app.get('/', isAuthMiddleware, async (req, res) => {
+    res.redirect('/home')
+})
 
-    if (req.isAuthenticated()) {
-        res.redirect('/home')
-    } else {
-        res.send(`
-        <h1>Login</h1>
-        <form action="/login" method="post">
-    
-            <label for="uname"><b>Username</b></label>
-            <input type="text" placeholder="Enter Username" name="uname" required>
-    
-            <label for="pw"><b>Password</b></label>
-            <input type="password" placeholder="Enter Password" name="pw" required>
-    
-            <button type="submit">Login</button>
-        </form>
-        <a href="/signup">
-            Or click here to sign up
-        </a>
-        `)
+app.get('/login', async (req, res) => {
 
-    }
+    res.send(`
+    <h1>Login</h1>
+    <form action="/login" method="post">
+
+        <label for="uname"><b>Username</b></label>
+        <input type="text" placeholder="Enter Username" name="uname" required>
+
+        <label for="pw"><b>Password</b></label>
+        <input type="password" placeholder="Enter Password" name="pw" required>
+
+        <button type="submit">Login</button>
+    </form>
+    <a href="/signup">
+        Or click here to sign up
+    </a>
+    `)
 })
 
 app.get('/login-failure', async (req, res) => {
@@ -252,7 +251,7 @@ app.get('/signup', async (req, res) => {
         <br />
 
         <label for="isAdmin"><b>Admin ?</b></label>
-        <input type="checkbox" name="isAdmin" required>
+        <input type="checkbox" name="isAdmin">
         <br />
 
         <button type="submit">Sign up</button>
@@ -301,7 +300,7 @@ function isAuthMiddleware(req: Request, res: Response, next: NextFunction) {
     if (req.isAuthenticated()) {
         next()
     } else {
-        res.redirect('/')
+        res.redirect('/login')
     }
 }
 function isAdminMiddleware(req: Request, res: Response, next: NextFunction) {
