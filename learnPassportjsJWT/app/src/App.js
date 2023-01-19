@@ -2,10 +2,8 @@ import { useEffect, useState } from 'react';
 import {
   BrowserRouter, Link, Route, Routes
 } from "react-router-dom";
+import axios from 'axios'
 import './App.css';
-
-const BASE_URL = `http://localhost:4000`
-
 
 function App() {
 
@@ -17,40 +15,26 @@ function App() {
   );
 }
 
-/**STEP 2 */
-function Login() {
-
-  function onLogin(e) {
-    e.preventDefault()
-
-    const formData = new FormData(e.currentTarget)
-
-    const body = Object.fromEntries(formData.entries())
-
-    fetch(`${BASE_URL}/login`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-      .then(res => res.json())
-      .then(res => {
-        /**
-         * 24/5/2022 daniel.kwok
-         * On login success, save jwt to local storage, and redirect to home
-         */
-        if (res.success) {
-          localStorage.setItem('jwt', res.token)
-          window.location.pathname = '/'
-        }
-      })
-
-  }
+function LoginPage() {
 
   return (
     <form
-      onSubmit={e => onLogin(e)}
+      onSubmit={e => {
+        e.preventDefault()
+
+        const formData = new FormData(e.currentTarget)
+        login(formData)
+          .then(res => {
+            /**
+             * 24/5/2022 daniel.kwok
+             * On login success, save jwt to local storage, and redirect to home
+             */
+            if (res.success) {
+              localStorage.setItem('jwt', res.token)
+              window.location.pathname = '/'
+            }
+          })
+      }}
     >
       <h1>Sign In</h1>
       <input
@@ -70,40 +54,28 @@ function Login() {
     </form>
   )
 }
-/**STEP 1 */
-function SignUp() {
 
-  function onSignup(e) {
-    e.preventDefault()
-
-    const formData = new FormData(e.currentTarget)
-
-    const body = Object.fromEntries(formData.entries())
-
-    fetch(`${BASE_URL}/signup`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-      .then(res => res.json())
-      .then(res => {
-        if (res.success) {
-          /**
-           * 24/5/2022 daniel.kwok
-           * On sign up success, save jwt to local storage, and redirect to home
-           */
-          localStorage.setItem('jwt', res.token)
-          window.location.pathname = '/'
-        }
-      })
-
-  }
+function SignUpPage() {
 
   return (
     <form
-      onSubmit={e => onSignup(e)}
+      onSubmit={e => {
+        e.preventDefault()
+
+        const formData = new FormData(e.currentTarget)
+        signup(formData)
+          .then(res => {
+            if (res.success) {
+              /**
+               * 24/5/2022 daniel.kwok
+               * On sign up success, save jwt to local storage, and redirect to home
+               */
+              localStorage.setItem('jwt', res.token)
+              window.location.pathname = '/'
+            }
+          })
+
+      }}
     >
       <h1>Sign up</h1>
       <input
@@ -128,6 +100,7 @@ function SignUp() {
     </form >
   )
 }
+
 function PublicRoutes() {
 
   return (
@@ -138,74 +111,20 @@ function PublicRoutes() {
       </div>
 
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<SignUp />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignUpPage />} />
       </Routes>
     </BrowserRouter>
   )
 }
 
-/**STEP 3 */
 function ProtectedRoutes() {
 
   const [profile, setProfile] = useState()
 
-  function signOut() {
-
-    fetch(`${BASE_URL}/logout`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': localStorage.getItem('jwt')
-      }
-    })
-      .then(res => res.json())
-      .then(res => {
-        if (res) {
-          /**
-           * 24/5/2022 daniel.kwok
-           * If logout success, remove jwt from local storage and redirect to login page
-           */
-          localStorage.removeItem('jwt')
-          window.location.pathname = '/login'
-        }
-      })
-  }
-
-  function getProfile() {
-
-    fetch(`${BASE_URL}/profile`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': localStorage.getItem('jwt')
-      }
-    })
-      .then(res => {
-        if(res.ok){
-          return res.json()
-        }else{
-          throw res
-        }
-      })
-      .then(res => {
-        setProfile(res.user)
-      })
-      .catch(err => {
-        switch(err.status){
-          case 401:
-            console.log(401)
-            // Proceed to call another api with refresh token
-            break
-          default:
-            console.log(err.status)
-        }
-      })
-  }
-
   useEffect(() => {
     getProfile()
+      .then(res => setProfile(res.profile))
   }, [])
 
   return (
@@ -214,12 +133,26 @@ function ProtectedRoutes() {
       <div>
         <Link to="/">Home</Link>
         <Link to="/profile">Profile</Link>
-        <button onClick={() => signOut()}>Sign out</button>
+        <button onClick={() => {
+          signOut()
+            .then(res => {
+              if (res) {
+                /**
+                 * 24/5/2022 daniel.kwok
+                 * If logout success, remove jwt from local storage and redirect to login page
+                 */
+                localStorage.removeItem('jwt')
+                window.location.pathname = '/login'
+              }
+            })
+        }}>
+          Sign out
+        </button>
       </div>
 
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/profile" element={<ProfilePage />} />
 
         {/* 
         24/5/2022 daniel.kwok
@@ -230,14 +163,73 @@ function ProtectedRoutes() {
     </BrowserRouter>
   )
 }
-function Home() {
+
+function HomePage() {
   return <h1>Home</h1>
 }
-function Profile() {
+function ProfilePage() {
   return <h1>Profile</h1>
 }
 function UnknownPage() {
   return <p>Unknown page. <a href='/'>Back to home</a></p>
 }
+
+/**********APIs**********/
+const instance = axios.create({
+  baseURL: 'http://localhost:4000',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+const BASE_URL = 'http://localhost:4000'
+
+function login(formData) {
+
+  return instance.post('/login', {
+    data: formData,
+  })
+    .then(res => {
+      console.log(res)
+      return res.data
+    })
+}
+
+function signup(formData) {
+
+  const body = Object.fromEntries(formData.entries())
+
+  return fetch(`${BASE_URL}/signup`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+    .then(res => res.json())
+}
+
+function signOut() {
+  return fetch(`${BASE_URL}/logout`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': localStorage.getItem('jwt')
+    }
+  })
+    .then(res => res.json())
+}
+
+function getProfile() {
+  return fetch(`${BASE_URL}/profile`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': localStorage.getItem('jwt')
+    }
+  })
+    .then(res => res.json())
+}
+
 
 export default App;

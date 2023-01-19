@@ -3,7 +3,6 @@ import MongoStore from 'connect-mongo';
 import cookieParser from 'cookie-parser';
 import crypto from 'crypto';
 import express from 'express';
-import sessions from 'express-session';
 import fs from 'fs';
 import { MongoClient, ObjectId } from 'mongodb';
 import passport from 'passport';
@@ -34,18 +33,7 @@ client.connect()
 const db = client.db(config.database.name)
 
 
-
 const authMiddleware = passport.authenticate(`jwt`, { session: false })
-
-/**
- * daniel.kwok 12/5/2022
- * For session crud, used by express-session and passportjwt
- */
-const sessionStore = MongoStore.create({
-    mongoUrl: url,
-    dbName: config.database.name,
-    collectionName: `Session`
-})
 
 /**
  * --------------SETUP PASSPORTJWT--------------
@@ -58,6 +46,7 @@ const sessionStore = MongoStore.create({
  * Function name can be custom, but function interface must be constant as shown here
  */
 const verifyCallback = async (payload: any, onDone: Function) => {
+    console.log('verifyCallback')
     try {
         const user = await db.collection("User").findOne({
             _id: new ObjectId(payload.sub),
@@ -204,16 +193,10 @@ app.post('/signup', async (req, res) => {
     }
 })
 
-app.post('/verify-session', authMiddleware, async (req, res) => {
-    res.json({
-        success: true,
-    })
-})
-
-app.post('/logout', async (req, res) => {
+app.post('/logout', authMiddleware, async (req, res) => {
     req.logout()
     res.json({
-        success: true
+        success: false
     })
 })
 
