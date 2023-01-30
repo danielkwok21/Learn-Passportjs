@@ -25,10 +25,11 @@ docker exec -it <mongo-container-id> bin/bash
 # To enter mongo
 mongo --host localhost -u root -p example
 
-# To show collections in mongo db
+# To view all Users in mongo db
 show dbs;
 use learnPassportjs
 show collections
+db.User.find();
 
 ```
 

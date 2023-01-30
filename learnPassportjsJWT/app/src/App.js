@@ -207,8 +207,6 @@ instance.interceptors.response.use(function (response) {
   return response;
 }, function (error) {
   if (error.response?.status === 401) {
-    console.log('Response 401')
-
     window.location.pathname = '/login'
   }
 
