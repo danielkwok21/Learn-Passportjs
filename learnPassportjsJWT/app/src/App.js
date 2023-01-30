@@ -1,16 +1,23 @@
+import axios from 'axios';
 import { useEffect, useState } from 'react';
 import {
-  BrowserRouter, Link, Route, Routes
+  BrowserRouter, Route, Routes
 } from "react-router-dom";
-import axios from 'axios'
 import './App.css';
 
 function App() {
 
   return (
     <div className="App">
-      <ProtectedRoutes />
-      <PublicRoutes />
+
+      <BrowserRouter>
+
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+        </Routes>
+      </BrowserRouter>
     </div>
   );
 }
@@ -18,40 +25,52 @@ function App() {
 function LoginPage() {
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
+    <div>
+      <form
+        onSubmit={e => {
+          e.preventDefault()
 
-        const formData = new FormData(e.currentTarget)
-        login(formData)
-          .then(res => {
-            /**
-             * 24/5/2022 daniel.kwok
-             * On login success, save jwt to local storage, and redirect to home
-             */
-            if (res.success) {
-              localStorage.setItem('jwt', res.token)
-              window.location.pathname = '/'
-            }
-          })
-      }}
-    >
-      <h1>Sign In</h1>
-      <input
-        name="uname"
-        placeholder='Username'
-      />
-      <input
-        type='password'
-        name="pw"
-        placeholder='Password'
-      />
-      <button
-        type='submit'
+          const formData = new FormData(e.currentTarget)
+          const uname = formData.get('uname')
+          const pw = formData.get('pw')
+          login(uname, pw)
+            .then(res => {
+              console.log(res)
+              /**
+               * 24/5/2022 daniel.kwok
+               * On login success, save jwt to local storage, and redirect to home
+               */
+              if (res.success) {
+                sessionStorage.setItem('x-demo-auth-access-token', res.accessToken)
+                sessionStorage.setItem('x-demo-auth-refresh-token', res.refreshToken)
+                window.location.pathname = '/'
+              }
+            })
+            .catch(err => {
+              alert(err?.toString())
+            })
+        }}
       >
-        Sign in
-      </button>
-    </form>
+        <h1>Sign In</h1>
+        <input
+          name="uname"
+          placeholder='Username'
+        />
+        <input
+          type='password'
+          name="pw"
+          placeholder='Password'
+        />
+        <button
+          type='submit'
+        >
+          Sign in
+        </button>
+      </form>
+      <p>
+        New member? <a href='/signup'>Sign up here</a>
+      </p>
+    </div>
   )
 }
 
@@ -63,15 +82,12 @@ function SignUpPage() {
         e.preventDefault()
 
         const formData = new FormData(e.currentTarget)
-        signup(formData)
+        const uname = formData.get('uname')
+        const pw = formData.get('pw')
+        signup(uname, pw)
           .then(res => {
             if (res.success) {
-              /**
-               * 24/5/2022 daniel.kwok
-               * On sign up success, save jwt to local storage, and redirect to home
-               */
-              localStorage.setItem('jwt', res.token)
-              window.location.pathname = '/'
+              window.location.pathname = '/login'
             }
           })
 
@@ -101,135 +117,155 @@ function SignUpPage() {
   )
 }
 
-function PublicRoutes() {
 
-  return (
-    <BrowserRouter>
-      <div>
-        <Link to="/login">Login</Link>
-        <Link to="/signup">Signup</Link>
-      </div>
-
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignUpPage />} />
-      </Routes>
-    </BrowserRouter>
-  )
-}
-
-function ProtectedRoutes() {
+function HomePage() {
 
   const [profile, setProfile] = useState()
 
   useEffect(() => {
     getProfile()
-      .then(res => setProfile(res.profile))
+      .then(res => setProfile(res?.user))
+      .catch(err => console.log(`Get profile error`))
   }, [])
 
   return (
-    <BrowserRouter>
-      <h1>Hi, {profile?.username}</h1>
-      <div>
-        <Link to="/">Home</Link>
-        <Link to="/profile">Profile</Link>
-        <button onClick={() => {
-          signOut()
-            .then(res => {
-              if (res) {
-                /**
-                 * 24/5/2022 daniel.kwok
-                 * If logout success, remove jwt from local storage and redirect to login page
-                 */
-                localStorage.removeItem('jwt')
-                window.location.pathname = '/login'
-              }
-            })
-        }}>
-          Sign out
-        </button>
-      </div>
-
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-
-        {/* 
-        24/5/2022 daniel.kwok
-        catch all for unknown page
-        */}
-        <Route path="*" element={<UnknownPage />} />
-      </Routes>
-    </BrowserRouter>
+    profile ? (
+      <>
+        <h1>Hi, {profile?.username}</h1>
+        <div>
+          <button onClick={() => {
+            signOut()
+              .then(res => {
+                if (res) {
+                  /**
+                   * 24/5/2022 daniel.kwok
+                   * If logout success, remove jwt from session storage and redirect to login page
+                   */
+                  sessionStorage.removeItem('x-demo-auth-access-token')
+                  sessionStorage.removeItem('x-demo-auth-refresh-token')
+                  window.location.pathname = '/login'
+                }
+              })
+          }}>
+            Sign out
+          </button>
+        </div>
+      </>
+    ) : (
+      null
+    )
   )
 }
 
-function HomePage() {
-  return <h1>Home</h1>
-}
-function ProfilePage() {
-  return <h1>Profile</h1>
-}
-function UnknownPage() {
-  return <p>Unknown page. <a href='/'>Back to home</a></p>
-}
 
 /**********APIs**********/
-const instance = axios.create({
-  baseURL: 'http://localhost:4000',
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
 const BASE_URL = 'http://localhost:4000'
+const instance = axios.create({
+  baseURL: BASE_URL
+})
 
-function login(formData) {
+instance.interceptors.request.use(async (request) => {
 
+  let token = sessionStorage.getItem('x-demo-auth-access-token')
+  console.log(`Old token: `, token)
+  if (!token) return request
+
+  const jwt = JSON.parse(atob(token.split('.')[1]));
+
+  const {
+    exp
+  } = jwt
+
+  const now = Math.floor(Date.now() / 1000)
+
+  if (now >= exp) {
+    console.log('Token is expired. Attempting to refresh access token via refresh token...')
+
+    await refreshAccessToken()
+      .then(res => {
+        console.log(`Successfully refreshed token.`)
+        sessionStorage.setItem('x-demo-auth-access-token', res.data.accessToken)
+        sessionStorage.setItem('x-demo-auth-refresh-token', res.data.refreshToken)
+
+        console.log(`New token: `, token)
+      })
+      .catch(err => {
+        console.log(`Failed to refresh token.`, err.response.data)
+
+        sessionStorage.removeItem('x-demo-auth-access-token')
+        sessionStorage.removeItem('x-demo-auth-refresh-token')
+
+      })
+  }
+
+  token = sessionStorage.getItem('x-demo-auth-access-token')
+  request.headers['Authorization'] = `Bearer ${token}`
+
+  return request;
+}, function (error) {
+  console.log(`Request errored`)
+  return Promise.reject(error);
+});
+
+instance.interceptors.response.use(function (response) {
+  return response;
+}, function (error) {
+  if (error.response?.status === 401) {
+    console.log('Response 401')
+
+    window.location.pathname = '/login'
+  }
+
+  return Promise.reject(error);
+});
+
+
+function login(uname, pw) {
   return instance.post('/login', {
-    data: formData,
+    uname, pw
   })
     .then(res => {
-      console.log(res)
       return res.data
     })
 }
 
-function signup(formData) {
-
-  const body = Object.fromEntries(formData.entries())
-
-  return fetch(`${BASE_URL}/signup`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-    headers: {
-      'Content-Type': 'application/json'
-    }
+function signup(uname, pw) {
+  return instance.post('/signup', {
+    uname, pw
   })
-    .then(res => res.json())
+    .then(res => {
+      return res.data
+    })
 }
 
 function signOut() {
-  return fetch(`${BASE_URL}/logout`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': localStorage.getItem('jwt')
-    }
-  })
-    .then(res => res.json())
+  return instance.delete('/logout',)
+    .then(res => {
+      return res.data
+    })
 }
 
 function getProfile() {
-  return fetch(`${BASE_URL}/profile`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': localStorage.getItem('jwt')
-    }
-  })
-    .then(res => res.json())
+  return instance.get('/profile')
+    .then(res => {
+      return res.data
+    })
 }
 
+function refreshAccessToken() {
+
+  const AT = sessionStorage.getItem('x-demo-auth-access-token')
+  const RT = sessionStorage.getItem('x-demo-auth-refresh-token')
+
+  return axios.post(`${BASE_URL}/access-token`, null, {
+    headers: {
+      'x-demo-auth-access-token': `Bearer ${AT}`,
+      'x-demo-auth-refresh-token': `Bearer ${RT}`
+    }
+  })
+
+}
+
+/**********APIs**********/
 
 export default App;

@@ -18,7 +18,6 @@ const app = express();
  * --------------SETUP DB--------------
  */
 const url = `mongodb://${config.database.user}:${config.database.password}@${config.database.host}:${config.database.port}`
-console.log({ url })
 const client = new MongoClient(url)
 
 client.connect()
@@ -46,8 +45,13 @@ const authMiddleware = passport.authenticate(`jwt`, { session: false })
  * Function name can be custom, but function interface must be constant as shown here
  */
 const verifyCallback = async (payload: any, onDone: Function) => {
-    console.log('verifyCallback')
     try {
+
+        const now = Math.floor(Date.now() / 1000)
+        if (payload.exp <= now) {
+            return onDone(null, false)
+        }
+
         const user = await db.collection("User").findOne({
             _id: new ObjectId(payload.sub),
         }) as User
@@ -63,7 +67,7 @@ const verifyCallback = async (payload: any, onDone: Function) => {
 
 const options: StrategyOptions = {
     jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-    secretOrKey: fs.readFileSync(path.join(__dirname, './dummy_public_key.pem')),
+    secretOrKey: fs.readFileSync(path.join(__dirname, './access_token_public_key.pem')),
     algorithms: ['RS256'],
 }
 
@@ -74,12 +78,12 @@ passport.use(strategy)
 /**
  * --------------INJECTING MIDDLEWARE--------------
  */
-app.use(cors())
 app.use(bodyParser.urlencoded({ extended: false }))
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(passport.initialize())
+app.use(cors())
 
 
 
@@ -91,6 +95,12 @@ type User = {
     username: string,
     salt: string,
     hash: string,
+}
+type RefreshToken = {
+    _id?: ObjectId
+    refreshToken: string,
+    userId: ObjectId,
+    exp: number,
 }
 
 /**
@@ -123,18 +133,18 @@ app.post('/login', async (req, res) => {
         delete user.hash
 
         const {
-            token, expires
-        } = issueJWT(user)
+            accessToken, refreshToken
+        } = await issueJWT(user._id)
 
         res.json({
             success: true,
             user: user,
-            token: token,
-            expiresIn: expires,
+            accessToken: accessToken,
+            refreshToken: refreshToken,
         })
 
     } catch (err) {
-        res.status(401).json({
+        res.status(400).json({
             success: false,
             message: err.message
         })
@@ -167,15 +177,14 @@ app.post('/signup', async (req, res) => {
         user._id = tx.insertedId
 
         const {
-            token, expires
-        } = issueJWT(user)
-
+            accessToken, refreshToken,
+        } = await issueJWT(user._id)
 
         res.json({
             success: true,
             user: user,
-            token: token,
-            expiresIn: expires,
+            accessToken: accessToken,
+            refreshToken: refreshToken,
         })
 
         function generatePassword(passwordPlain: string): { salt: string, hash: string } {
@@ -193,7 +202,7 @@ app.post('/signup', async (req, res) => {
     }
 })
 
-app.post('/logout', authMiddleware, async (req, res) => {
+app.delete('/logout', authMiddleware, async (req, res) => {
     req.logout()
     res.json({
         success: false
@@ -214,67 +223,90 @@ app.get('/profile', authMiddleware, async (req, res) => {
     res.json({
         user
     })
-
 })
 
-app.get('/login', async (req, res) => {
-
-    const {
-        uname, pw
-    } = req.body
+app.post('/access-token', async (req, res) => {
 
     try {
-        const user = await db.collection("User").findOne({
-            username: uname,
-        }) as User
+        const AT = req.headers['x-demo-auth-access-token']
+        const RT = req.headers['x-demo-auth-refresh-token'] as string
+        const RTwithoutBearer = RT?.replace('Bearer ', '')
 
-        if (!user) throw new Error(`No user found`)
-        const hashedPassword = crypto.pbkdf2Sync(pw, user.salt, 10000, 64, 'sha512').toString('hex')
-        const isValidPassword = hashedPassword === user.hash
+        const existingRT = await db.collection("RefreshToken").findOne({
+            refreshToken: RTwithoutBearer,
+        }) as RefreshToken
 
-        if (!isValidPassword) throw new Error(`Wrong username or password provided`)
+        if (!existingRT) {
+            throw new Error(`Invalid refresh token`)
+        }
+
+        const now = Math.floor(Date.now() / 1000)
+        if (existingRT.exp < now) {
+            await db.collection("RefreshToken").deleteOne({
+                _id: new ObjectId(existingRT._id)
+            })
+            throw new Error(`Expired refresh token`)
+        }
 
         const {
-            token, expires
-        } = issueJWT(user)
+            accessToken, refreshToken,
+        } = await issueJWT(existingRT.userId)
 
         res.json({
-            success: true,
-            user: user,
-            token: token,
-            expiresIn: expires,
+            accessToken,
+            refreshToken,
         })
-
     } catch (err) {
-        res.status(401).json({
+        res.status(400).json({
             success: false,
-            message: err.message
+            message: err?.toString()
         })
     }
 })
+
 
 /**
  * --------------COMMON UTILS--------------
  */
 
-function issueJWT(user: User): { token: string, expires: string } {
-    const payload: {
-        sub?: ObjectId,
-        iat: number,
-    } = {
-        sub: user._id,
-        iat: Date.now()
+async function issueJWT(userId: ObjectId): Promise<{ accessToken: string, refreshToken: string, }> {
+
+    const now = Math.floor(Date.now() / 1000)
+
+    const ATpayload = {
+        sub: userId,
+        iat: now,
+        exp: now + 5
+    }
+    const ATPrivateKey = fs.readFileSync(path.join(__dirname, './access_token_private_key.pem'))
+    const signedAT = jsonwebtoken.sign(ATpayload, ATPrivateKey, { algorithm: 'RS256' })
+
+    const RTpayload = {
+        sub: userId,
+        iat: now,
+        exp: now + 10
+    }
+    const RTPrivateKey = fs.readFileSync(path.join(__dirname, './refresh_token_private_key.pem'))
+    const signedRT = jsonwebtoken.sign(RTpayload, RTPrivateKey, { algorithm: 'RS256' })
+
+
+    /**Delete existing refresh token, if exists */
+    await db.collection("RefreshToken").deleteOne({
+        userId: new ObjectId(userId),
+    })
+
+    /**Store newly generated refresh token */
+    const newRefreshToken: RefreshToken = {
+        refreshToken: signedRT,
+        userId: userId,
+        exp: RTpayload.exp,
     }
 
-    const expiresIn = '1s'
-
-    const privateKey = fs.readFileSync(path.join(__dirname, './dummy_private_key.pem'))
-
-    const signedToken = jsonwebtoken.sign(payload, privateKey, { expiresIn: expiresIn, algorithm: 'RS256' })
+    await db.collection("RefreshToken").insertOne(newRefreshToken)
 
     return {
-        token: `Bearer ${signedToken}`,
-        expires: expiresIn
+        accessToken: `${signedAT}`,
+        refreshToken: `${signedRT}`,
     }
 }
 
