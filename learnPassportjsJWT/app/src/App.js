@@ -167,7 +167,6 @@ const instance = axios.create({
 instance.interceptors.request.use(async (request) => {
 
   let token = sessionStorage.getItem('x-demo-auth-access-token')
-  console.log(`Old token: `, token)
   if (!token) return request
 
   const jwt = JSON.parse(atob(token.split('.')[1]));
@@ -179,15 +178,12 @@ instance.interceptors.request.use(async (request) => {
   const now = Math.floor(Date.now() / 1000)
 
   if (now >= exp) {
-    console.log('Token is expired. Attempting to refresh access token via refresh token...')
-
+    console.log('Token is expired. Attempting to refresh access token via refresh token...') 
     await refreshAccessToken()
       .then(res => {
         console.log(`Successfully refreshed token.`)
         sessionStorage.setItem('x-demo-auth-access-token', res.data.accessToken)
         sessionStorage.setItem('x-demo-auth-refresh-token', res.data.refreshToken)
-
-        console.log(`New token: `, token)
       })
       .catch(err => {
         console.log(`Failed to refresh token.`, err.response.data)

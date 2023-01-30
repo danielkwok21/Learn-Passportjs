@@ -47,11 +47,6 @@ const authMiddleware = passport.authenticate(`jwt`, { session: false })
 const verifyCallback = async (payload: any, onDone: Function) => {
     try {
 
-        const now = Math.floor(Date.now() / 1000)
-        if (payload.exp <= now) {
-            return onDone(null, false)
-        }
-
         const user = await db.collection("User").findOne({
             _id: new ObjectId(payload.sub),
         }) as User
@@ -241,6 +236,12 @@ app.post('/access-token', async (req, res) => {
         }
 
         const now = Math.floor(Date.now() / 1000)
+
+        console.log({
+            exp: existingRT.exp,
+            now: now,
+        })
+
         if (existingRT.exp < now) {
             await db.collection("RefreshToken").deleteOne({
                 _id: new ObjectId(existingRT._id)
@@ -276,19 +277,16 @@ async function issueJWT(userId: ObjectId): Promise<{ accessToken: string, refres
     const ATpayload = {
         sub: userId,
         iat: now,
-        exp: now + 5
     }
     const ATPrivateKey = fs.readFileSync(path.join(__dirname, './access_token_private_key.pem'))
-    const signedAT = jsonwebtoken.sign(ATpayload, ATPrivateKey, { algorithm: 'RS256' })
+    const signedAT = jsonwebtoken.sign(ATpayload, ATPrivateKey, { expiresIn: '5s', algorithm: 'RS256' })
 
     const RTpayload = {
         sub: userId,
         iat: now,
-        exp: now + 10
     }
     const RTPrivateKey = fs.readFileSync(path.join(__dirname, './refresh_token_private_key.pem'))
-    const signedRT = jsonwebtoken.sign(RTpayload, RTPrivateKey, { algorithm: 'RS256' })
-
+    const signedRT = jsonwebtoken.sign(RTpayload, RTPrivateKey, { expiresIn: '10s', algorithm: 'RS256' })
 
     /**Delete existing refresh token, if exists */
     await db.collection("RefreshToken").deleteOne({
@@ -296,10 +294,11 @@ async function issueJWT(userId: ObjectId): Promise<{ accessToken: string, refres
     })
 
     /**Store newly generated refresh token */
+    const RT_EXPIRES_IN_SECONDS = 10
     const newRefreshToken: RefreshToken = {
         refreshToken: signedRT,
         userId: userId,
-        exp: RTpayload.exp,
+        exp: now + RT_EXPIRES_IN_SECONDS,
     }
 
     await db.collection("RefreshToken").insertOne(newRefreshToken)
